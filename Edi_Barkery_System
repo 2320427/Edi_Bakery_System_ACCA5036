@@ -1,0 +1,333 @@
+
+import json  # For reading and writing JSON files
+import os    # For checking file existence and interacting with the OS
+import csv   # For exporting inventory to CSV
+
+# Constants
+INVENTORY_FILE = "bakery_System_ACCA5036.json"# File name where the inventory data is stored in JSON format
+EXPORT_FILE = "bakery_System_ACCA5036.csv"# File name used to export the inventory data in CSV format
+BACKUP_FILE = "Backup_bakery_System.json"# File name used to store a backup copy of the inventory data
+STANDARD_UNITS = {"kg", "liters", "pieces", "packs"}# A set of standard units used for measuring in quantities
+LOW_STOCK_THRESHOLD = 5 # Threshold value to determine when an ingredient is considered low in stock
+
+
+# Load inventory from file or use default
+def load_inventory_from_file():
+    if os.path.exists(INVENTORY_FILE):
+        with open(INVENTORY_FILE, "r") as file:
+            inventory = json.load(file)
+    else:
+        inventory = {
+            "flour": [15.8, "kg"],
+            "sugar": [4.5, "kg"],
+            "eggs": [8, "packs"],
+            "milk": [3, "liters"],
+            "butter": [3.5, "kg"],
+            "salt": [4.2, "kg"],
+            "baking powder": [15.1, "kg"],
+            "vanilla extract": [6.05, "liters"],
+            "chocolate chips": [0.3, "kg"],
+            "honey": [3.4, "liters"],
+            "yeast": [7.05, "kg"],
+            "olive oil": [4.5, "liters"],
+            "cocoa powder": [6.2, "kg"],
+            "almonds": [7, "kg"],
+            "raisins": [10, "kg"],
+            "cinnamon": [25, "kg"],
+        }
+
+    red = "\033[91m"
+    reset = "\033[0m"
+    print("\nLow Level Items in the Inventory...")
+    for item, (quantity, unit) in inventory.items():
+        if quantity < LOW_STOCK_THRESHOLD:
+            print(f"{red}WARNING: Low stock on {item.title()} - {quantity} {unit}{reset}")
+    return inventory
+
+# Save inventory to file
+def save_inventory_to_file():
+    global ingredients_inventory
+    with open(INVENTORY_FILE, "w") as file:
+        json.dump(ingredients_inventory, file, indent=4)
+
+# Backup inventory to file
+def backup_inventory():
+    global ingredients_inventory
+    with open(BACKUP_FILE, "w") as file:
+        json.dump(ingredients_inventory, file, indent=4)
+
+# Undo last action
+def undo_last_action():
+    global ingredients_inventory
+    if os.path.exists(BACKUP_FILE):
+        with open(BACKUP_FILE, "r") as file:
+            ingredients_inventory = json.load(file)
+        save_inventory_to_file()
+        print("Last action has been undone.")
+    else:
+        print("No backup found to undo.")
+
+# Export inventory to CSV
+def export_inventory_to_csv():
+    with open(EXPORT_FILE, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Ingredient", "Quantity", "Unit"])
+        for ingredient, (quantity, unit) in sorted(ingredients_inventory.items()):
+            writer.writerow([ingredient.title(), quantity, unit])
+    print(f"\nInventory successfully exported to '{EXPORT_FILE}'.")
+
+# Load inventory at startup
+ingredients_inventory = load_inventory_from_file()
+
+# Display header
+def display_header():
+    print("=" * 60)
+    print("  SWEET SURRENDER BAKERY - INVENTORY MANAGEMENT 2320427  ")
+    print("=" * 60)
+
+# Display menu
+def display_menu():
+    print("\n" + "-" * 40)
+    print(" INVENTORY MENU")
+    print("-" * 40)
+    print("1. View All Ingredients")
+    print("2. Add New Ingredient")
+    print("3. Update Ingredient Quantity")
+    print("4. Search for Ingredient")
+    print("5. Export Inventory to CSV")
+    print("6. Delete Ingredient")
+    print("7. Low Stock Report")
+    print("8. Undo Last Action")
+    print("9. Exit Program")
+    print("-" * 40)
+
+# Validate ingredient name
+def validate_ingredient_name(name):
+    if not name or name.strip() == "":
+        print("Error: Ingredient name cannot be empty!")
+        return False
+    if not all(char.isalpha() or char.isspace() or char in "'-." for char in name):
+        print("Error: Ingredient name can only contain letters, spaces, hyphens, apostrophes, and full stop!")
+        return False
+    return True
+
+# Validate quantity
+def validate_quantity(quantity_str):
+    try:
+        quantity = float(quantity_str)
+        if quantity <= 0:
+            print("Error: Quantity must be a positive number!")
+            return False, 0
+        if quantity > 1000:
+            print("Error: Quantity seems too large (maximum 1000 units)!")
+            return False, 0
+        return True, quantity
+    except ValueError:
+        print("Error: Please enter a valid number for quantity!")
+        return False, 0
+
+# Validate unit
+def validate_unit(unit):
+    unit = unit.lower().strip()
+    if unit not in STANDARD_UNITS:
+        print(f"Warning: '{unit}' is not a standard unit. Suggested units: {', '.join(STANDARD_UNITS)}")
+    return unit
+
+# Get user choice
+def get_user_choice():
+    while True:
+        try:
+            choice = input("\nEnter your choice (1-9): ").strip()
+            choice_num = int(choice)
+            if 1 <= choice_num <= 9:
+                return choice_num
+            else:
+                print("Error: Please enter a number between 1 and 9!")
+        except ValueError:
+            print("Error: Please enter a valid number!")
+
+# Add new ingredient
+def add_ingredient():
+    print("\n" + "=" * 30)
+    print(" ADD NEW INGREDIENT")
+    print("=" * 30)
+
+    while True:
+        ingredient_name = input("Enter ingredient name: ").strip().lower()
+        if validate_ingredient_name(ingredient_name):
+            break
+
+    if ingredient_name in ingredients_inventory:
+        print(f"\nIngredient '{ingredient_name.title()}' already exists!")
+        print(f"Current quantity: {ingredients_inventory[ingredient_name][0]} {ingredients_inventory[ingredient_name][1]}")
+        update_choice = input("Do you want to update the quantity instead? (y/n): ").strip().lower()
+        if update_choice == 'y':
+            update_existing_ingredient(ingredient_name)
+        else:
+            print("Operation cancelled.")
+        return
+
+    while True:
+        quantity_input = input("Enter quantity ").strip()
+        is_valid, quantity = validate_quantity(quantity_input)
+        if is_valid:
+            break
+
+    unit = input("Enter unit of measurement (kg/litres/pieces/packs): ").strip()
+    unit = validate_unit(unit)
+    if not unit:
+        unit = "units"
+
+    backup_inventory()
+    ingredients_inventory[ingredient_name] = [quantity, unit]
+    save_inventory_to_file()
+    print(f"\nIngredient '{ingredient_name.title()}' added with quantity {quantity} {unit}.")
+    if quantity < LOW_STOCK_THRESHOLD:
+        print(f" WARNING: Low stock alert for '{ingredient_name.title()}'!")
+
+# Update existing ingredient
+def update_existing_ingredient(ingredient_name, new_quantity=None):
+    print("\n" + "=" * 30)
+    print(f" UPDATE INGREDIENT: {ingredient_name.title()}")
+    print("=" * 30)
+
+    update_choice = None
+    while True:
+        try:
+            update_choice = int(input(
+                "\nUpdate options:\n1. Set new total quantity\n2. Add to current quantity\n3. Subtract from current quantity (usage)\nEnter your choice: ").strip())
+            if update_choice not in [1, 2, 3]:
+                raise ValueError()
+            break
+        except ValueError:
+            print("Error: Please enter a valid number between 1 and 3!")
+
+    while True:
+        quantity_input = input("Enter new quantity ").strip()
+        is_valid, quantity = validate_quantity(quantity_input)
+        if is_valid:
+            break
+
+    current_quantity = ingredients_inventory[ingredient_name][0]
+
+    if update_choice == 1:
+        new_quantity = quantity
+    elif update_choice == 2:
+        new_quantity = current_quantity + quantity
+    elif update_choice == 3:
+        new_quantity = current_quantity - quantity
+
+    elif new_quantity < 0:         new_quantity = 0
+
+    unit = ingredients_inventory[ingredient_name][1]
+    backup_inventory()
+    ingredients_inventory[ingredient_name] = [new_quantity, unit]
+    save_inventory_to_file()
+    print(f"\nIngredient '{ingredient_name.title()}' updated with new quantity {new_quantity} {unit}.")
+    if new_quantity < LOW_STOCK_THRESHOLD:
+        print(f" WARNING: Low stock alert for '{ingredient_name.title()}'!")
+
+# Delete ingredient
+def delete_ingredient():
+    print("\n" + "=" * 30)
+    print(" DELETE INGREDIENT")
+    print("=" * 30)
+
+    ingredient_name = input("Enter the name of the ingredient to delete: ").strip().lower()
+    if ingredient_name in ingredients_inventory:
+        confirm = input(f"Are you sure you want to delete '{ingredient_name.title()}'? (y/n): ").strip().lower()
+        if confirm == 'y':
+            backup_inventory()
+            del ingredients_inventory[ingredient_name]
+            save_inventory_to_file()
+            print(f"'{ingredient_name.title()}' has been deleted from the inventory.")
+        else:
+            print("Deletion cancelled.")
+    else:
+        print(f"Ingredient '{ingredient_name.title()}' not found in inventory.")
+
+# Display all ingredients
+def display_numbered_ingredients():
+    print("\nIngredient List:")
+    for index, (ingredient, (quantity, unit)) in enumerate(sorted(ingredients_inventory.items()), start=1):
+        print(f"{index}. {ingredient.title()}: {quantity} {unit}")
+    print(f"\nTotal ingredients in inventory: {len(ingredients_inventory)}")
+
+# Search for ingredient
+def search_ingredient():
+    search_term = input("Enter ingredient name to search: ").strip().lower()
+    exact_match = ingredients_inventory.get(search_term)
+
+    if exact_match:
+        quantity, unit = exact_match
+        print(f"\nExact match found: {search_term.title()}: {quantity} {unit}")
+    else:
+        partial_matches = {name: details for name, details in ingredients_inventory.items() if search_term in name}
+        if partial_matches:
+            print("\nPartial matches found:")
+            for name, (quantity, unit) in partial_matches.items():
+                print(f"{name.title()}: {quantity} {unit}")
+        else:
+            print(f"\nNo matches found for '{search_term}'.")
+
+# Low stock report
+def low_stock_report(threshold=LOW_STOCK_THRESHOLD):
+    red = "\033[91m"
+    reset = "\033[0m"
+
+    print(f"\nIngredients with quantity below {threshold}:")
+    low_stock_items = {name: details for name, details in ingredients_inventory.items() if details[0] < threshold}
+
+    if low_stock_items:
+        for name, (quantity, unit) in low_stock_items.items():
+            print(f"{red}- {name.title()}: {quantity} {unit}{reset}")
+    else:
+        print("All ingredients are sufficiently stocked.")
+
+# Confirm exit
+def confirm_exit():
+    while True:
+        choice = input("\nAre you sure you want to exit? (y/n): ").strip().lower()
+        if choice in ['y', 'yes']:
+            return True
+        elif choice in ['n', 'no']:
+            return False
+        else:
+            print("Please enter 'y' for yes or 'n' for no.")
+
+# Main program loop
+def main():
+    display_header()
+    while True:
+        display_menu()
+        choice = get_user_choice()
+        if choice == 1:
+            display_numbered_ingredients()
+        elif choice == 2:
+            add_ingredient()
+        elif choice == 3:
+            ingredient_name = input("Enter ingredient name to update: ").strip().lower()
+            if ingredient_name in ingredients_inventory:
+                update_existing_ingredient(ingredient_name)
+            else:
+                print(f"Ingredient '{ingredient_name.title()}' not found in inventory.")
+        elif choice == 4:
+            search_ingredient()
+        elif choice == 5:
+            export_inventory_to_csv()
+        elif choice == 6:
+            delete_ingredient()
+        elif choice == 7:
+            low_stock_report()
+        elif choice == 8:
+            undo_last_action()
+        elif choice == 9:
+            if confirm_exit():
+                print("\n" + "=" * 50)
+                print("Thank you for using Sweet Surrender Bakery")
+                print("See You Later!")
+                print("=" * 50)
+                break
+
+if __name__ == "__main__":
+    main()
